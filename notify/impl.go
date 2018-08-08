@@ -503,7 +503,7 @@ func (n *PagerDuty) notifyV1(
 	}
 	defer resp.Body.Close()
 
-	return n.retryV1(resp.StatusCode)
+	return n.retryV1(resp)
 }
 
 func (n *PagerDuty) notifyV2(
@@ -521,9 +521,13 @@ func (n *PagerDuty) notifyV2(
 		n.conf.Severity = "error"
 	}
 
-	var payload *pagerDutyPayload
-	if eventType == pagerDutyEventTrigger {
-		payload = &pagerDutyPayload{
+	msg := &pagerDutyMessage{
+		Client:      tmpl(n.conf.Client),
+		ClientURL:   tmpl(n.conf.ClientURL),
+		RoutingKey:  tmpl(string(n.conf.RoutingKey)),
+		EventAction: eventType,
+		DedupKey:    hashKey(key),
+		Payload: &pagerDutyPayload{
 			Summary:       tmpl(n.conf.Description),
 			Source:        tmpl(n.conf.Client),
 			Severity:      tmpl(n.conf.Severity),
@@ -531,19 +535,7 @@ func (n *PagerDuty) notifyV2(
 			Class:         tmpl(n.conf.Class),
 			Component:     tmpl(n.conf.Component),
 			Group:         tmpl(n.conf.Group),
-		}
-	}
-
-	msg := &pagerDutyMessage{
-		RoutingKey:  tmpl(string(n.conf.RoutingKey)),
-		EventAction: eventType,
-		DedupKey:    hashKey(key),
-		Payload:     payload,
-	}
-
-	if eventType == pagerDutyEventTrigger {
-		msg.Client = tmpl(n.conf.Client)
-		msg.ClientURL = tmpl(n.conf.ClientURL)
+		},
 	}
 
 	if tmplErr != nil {
@@ -609,14 +601,23 @@ func (n *PagerDuty) Notify(ctx context.Context, as ...*types.Alert) (bool, error
 	return n.notifyV2(ctx, c, eventType, key, data, details, as...)
 }
 
-func (n *PagerDuty) retryV1(statusCode int) (bool, error) {
+func (n *PagerDuty) retryV1(resp *http.Response) (bool, error) {
 	// Retrying can solve the issue on 403 (rate limiting) and 5xx response codes.
 	// 2xx response codes indicate a successful request.
 	// https://v2.developer.pagerduty.com/docs/trigger-events
+	statusCode := resp.StatusCode
+
+	if statusCode == 400 && resp.Body != nil {
+		bs, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return false, fmt.Errorf("unexpected status code %v : problem reading response: %v", statusCode, err)
+		}
+		return false, fmt.Errorf("bad request (status code %v): %v", statusCode, string(bs))
+	}
+
 	if statusCode/100 != 2 {
 		return (statusCode == 403 || statusCode/100 == 5), fmt.Errorf("unexpected status code %v", statusCode)
 	}
-
 	return false, nil
 }
 
@@ -988,7 +989,10 @@ func (n *Wechat) Notify(ctx context.Context, as ...*types.Alert) (bool, error) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return true, err
+	}
 	level.Debug(n.logger).Log("msg", "response: "+string(body), "incident", key)
 
 	if resp.StatusCode != 200 {

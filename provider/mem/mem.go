@@ -24,14 +24,21 @@ import (
 	"github.com/prometheus/common/model"
 )
 
+const alertChannelLength = 200
+
 // Alerts gives access to a set of alerts. All methods are goroutine-safe.
 type Alerts struct {
 	alerts store.Store
 	cancel context.CancelFunc
 
 	mtx       sync.Mutex
-	listeners map[int]chan *types.Alert
+	listeners map[int]listeningAlerts
 	next      int
+}
+
+type listeningAlerts struct {
+	alerts chan *types.Alert
+	done   chan struct{}
 }
 
 // NewAlerts returns a new alert provider.
@@ -40,7 +47,7 @@ func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration) (*
 	a := &Alerts{
 		alerts:    store.NewAlerts(ctx, intervalGC),
 		cancel:    cancel,
-		listeners: map[int]chan *types.Alert{},
+		listeners: map[int]listeningAlerts{},
 		next:      0,
 	}
 	a.alerts.SetGCCallback(func(alert *types.Alert) {
@@ -63,13 +70,13 @@ func (a *Alerts) Close() error {
 // They are not guaranteed to be in chronological order.
 func (a *Alerts) Subscribe() provider.AlertIterator {
 	var (
-		ch   = make(chan *types.Alert, 200)
+		ch   = make(chan *types.Alert, alertChannelLength)
 		done = make(chan struct{})
 	)
 	a.mtx.Lock()
 	i := a.next
 	a.next++
-	a.listeners[i] = ch
+	a.listeners[i] = listeningAlerts{alerts: ch, done: done}
 	a.mtx.Unlock()
 
 	go func() {
@@ -98,7 +105,7 @@ func (a *Alerts) Subscribe() provider.AlertIterator {
 // pending notifications.
 func (a *Alerts) GetPending() provider.AlertIterator {
 	var (
-		ch   = make(chan *types.Alert, 200)
+		ch   = make(chan *types.Alert, alertChannelLength)
 		done = make(chan struct{})
 	)
 
@@ -124,13 +131,6 @@ func (a *Alerts) Get(fp model.Fingerprint) (*types.Alert, error) {
 
 // Put adds the given alert to the set.
 func (a *Alerts) Put(alerts ...*types.Alert) error {
-	a.mtx.Lock()
-	listeners := make([]chan *types.Alert, 0, len(a.listeners))
-	for _, ch := range a.listeners {
-		listeners = append(listeners, ch)
-	}
-	a.mtx.Unlock()
-
 	for _, alert := range alerts {
 		fp := alert.Fingerprint()
 
@@ -146,9 +146,14 @@ func (a *Alerts) Put(alerts ...*types.Alert) error {
 			// TODO: Log something??
 		}
 
-		for _, ch := range listeners {
-			ch <- alert
+		a.mtx.Lock()
+		for _, l := range a.listeners {
+			select {
+			case l.alerts <- alert:
+			case <-l.done:
+			}
 		}
+		a.mtx.Unlock()
 	}
 
 	return nil
