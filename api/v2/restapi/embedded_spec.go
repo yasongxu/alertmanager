@@ -132,6 +132,67 @@ func init() {
         }
       }
     },
+    "/alerts/groups": {
+      "get": {
+        "description": "Get a list of alert groups",
+        "tags": [
+          "alertgroups"
+        ],
+        "operationId": "getAlertGroups",
+        "parameters": [
+          {
+            "type": "boolean",
+            "default": true,
+            "description": "Show active alerts",
+            "name": "active",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "default": true,
+            "description": "Show silenced alerts",
+            "name": "silenced",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "default": true,
+            "description": "Show inhibited alerts",
+            "name": "inhibited",
+            "in": "query"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A list of matchers to filter alerts by",
+            "name": "filter",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "A regex matching receivers to filter alerts by",
+            "name": "receiver",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get alert groups response",
+            "schema": {
+              "$ref": "#/definitions/alertGroups"
+            }
+          },
+          "400": {
+            "$ref": "#/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/receivers": {
       "get": {
         "description": "Get list of all receivers (name of notification integrations)",
@@ -307,6 +368,35 @@ func init() {
         "labels": {
           "$ref": "#/definitions/labelSet"
         }
+      }
+    },
+    "alertGroup": {
+      "type": "object",
+      "properties": {
+        "alerts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/gettableAlert"
+          }
+        },
+        "groupBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "labels": {
+          "$ref": "#/definitions/labelSet"
+        },
+        "receiver": {
+          "type": "string"
+        }
+      }
+    },
+    "alertGroups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/alertGroup"
       }
     },
     "alertStatus": {
@@ -825,6 +915,73 @@ func init() {
         }
       }
     },
+    "/alerts/groups": {
+      "get": {
+        "description": "Get a list of alert groups",
+        "tags": [
+          "alertgroups"
+        ],
+        "operationId": "getAlertGroups",
+        "parameters": [
+          {
+            "type": "boolean",
+            "default": true,
+            "description": "Show active alerts",
+            "name": "active",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "default": true,
+            "description": "Show silenced alerts",
+            "name": "silenced",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "default": true,
+            "description": "Show inhibited alerts",
+            "name": "inhibited",
+            "in": "query"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A list of matchers to filter alerts by",
+            "name": "filter",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "A regex matching receivers to filter alerts by",
+            "name": "receiver",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get alert groups response",
+            "schema": {
+              "$ref": "#/definitions/alertGroups"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
     "/receivers": {
       "get": {
         "description": "Get list of all receivers (name of notification integrations)",
@@ -1012,6 +1169,35 @@ func init() {
         "labels": {
           "$ref": "#/definitions/labelSet"
         }
+      }
+    },
+    "alertGroup": {
+      "type": "object",
+      "properties": {
+        "alerts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/gettableAlert"
+          }
+        },
+        "groupBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "labels": {
+          "$ref": "#/definitions/labelSet"
+        },
+        "receiver": {
+          "type": "string"
+        }
+      }
+    },
+    "alertGroups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/alertGroup"
       }
     },
     "alertStatus": {
