@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -37,9 +38,11 @@ import (
 	promlogflag "github.com/prometheus/common/promlog/flag"
 	"github.com/prometheus/common/route"
 	"github.com/prometheus/common/version"
+	"github.com/prometheus/prometheus/pkg/labels"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/prometheus/alertmanager/api"
+	open_api_models "github.com/prometheus/alertmanager/api/v2/models"
 	"github.com/prometheus/alertmanager/cluster"
 	"github.com/prometheus/alertmanager/config"
 	"github.com/prometheus/alertmanager/dispatch"
@@ -246,6 +249,11 @@ func run() int {
 	}
 	defer alerts.Close()
 
+	// TODO: Finish me!
+	groupFn := func(matchers []*labels.Matcher, receivers *regexp.Regexp, silenced, inhibited, active bool) *open_api_models.AlertGroups {
+		return &open_api_models.AlertGroups{}
+	}
+
 	api, err := api.New(api.Options{
 		Alerts:      alerts,
 		Silences:    silences,
@@ -255,6 +263,7 @@ func run() int {
 		Concurrency: *getConcurrency,
 		Logger:      log.With(logger, "component", "api"),
 		Registry:    prometheus.DefaultRegisterer,
+		GroupFunc:   groupFn,
 	})
 
 	if err != nil {

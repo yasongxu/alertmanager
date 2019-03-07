@@ -54,6 +54,7 @@ type API struct {
 	peer           *cluster.Peer
 	silences       *silence.Silences
 	alerts         provider.Alerts
+	groups         groupsFn
 	getAlertStatus getAlertStatusFn
 	uptime         time.Time
 
@@ -70,12 +71,14 @@ type API struct {
 	Handler http.Handler
 }
 
+type groupsFn func(matchers []*labels.Matcher, receivers *regexp.Regexp, silenced, inhibited, active bool) *open_api_models.AlertGroups
 type getAlertStatusFn func(prometheus_model.Fingerprint) types.AlertStatus
 type setAlertStatusFn func(prometheus_model.LabelSet)
 
 // NewAPI returns a new Alertmanager API v2
 func NewAPI(
 	alerts provider.Alerts,
+	gf groupsFn,
 	sf getAlertStatusFn,
 	silences *silence.Silences,
 	peer *cluster.Peer,
@@ -84,6 +87,7 @@ func NewAPI(
 	api := API{
 		alerts:         alerts,
 		getAlertStatus: sf,
+		groups:         gf,
 		peer:           peer,
 		silences:       silences,
 		logger:         l,
@@ -392,8 +396,58 @@ func (api *API) postAlertsHandler(params alert_ops.PostAlertsParams) middleware.
 }
 
 func (api *API) getAlertGroupsHandler(params alertgroup_ops.GetAlertGroupsParams) middleware.Responder {
-	// TODO: Actual business logic.
-	res := open_api_models.AlertGroups{}
+	var (
+		err            error
+		receiverFilter *regexp.Regexp
+		// Initialize result slice to prevent api returning `null` when there
+		// are no alert groups present
+		res      = open_api_models.AlertGroups{}
+		matchers = []*labels.Matcher{}
+	)
+
+	if params.Filter != nil {
+		for _, matcherString := range params.Filter {
+			matcher, err := parse.Matcher(matcherString)
+			if err != nil {
+				level.Error(api.logger).Log("msg", "failed to parse matchers", "err", err)
+				return alertgroup_ops.NewGetAlertGroupsBadRequest().WithPayload(err.Error())
+			}
+
+			matchers = append(matchers, matcher)
+		}
+	}
+
+	if params.Receiver != nil {
+		receiverFilter, err = regexp.Compile("^(?:" + *params.Receiver + ")$")
+		if err != nil {
+			return alertgroup_ops.
+				NewGetAlertGroupsBadRequest().
+				WithPayload(
+					fmt.Sprintf("failed to parse receiver param: %v", err.Error()),
+				)
+		}
+	}
+
+	// Set alert's current status based on its label set.
+	// api.setAlertStatus(a.Labels)
+
+	// Get alert's current status after seeing if it is suppressed.
+	// status := api.getAlertStatus(a.Fingerprint())
+
+	// if !*params.Active && status.State == types.AlertStateActive {
+	// 	continue
+	// }
+
+	// if !*params.Silenced && len(status.SilencedBy) != 0 {
+	// 	continue
+	// }
+
+	// if !*params.Inhibited && len(status.InhibitedBy) != 0 {
+	// 	continue
+	// }
+
+	res = *api.groups(matchers, receiverFilter, *params.Silenced, *params.Inhibited, *params.Active)
+
 	return alertgroup_ops.NewGetAlertGroupsOK().WithPayload(res)
 }
 
