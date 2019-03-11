@@ -379,12 +379,6 @@ func init() {
             "$ref": "#/definitions/gettableAlert"
           }
         },
-        "groupBy": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
         "labels": {
           "$ref": "#/definitions/labelSet"
         },
@@ -1178,12 +1172,6 @@ func init() {
           "type": "array",
           "items": {
             "$ref": "#/definitions/gettableAlert"
-          }
-        },
-        "groupBy": {
-          "type": "array",
-          "items": {
-            "type": "string"
           }
         },
         "labels": {

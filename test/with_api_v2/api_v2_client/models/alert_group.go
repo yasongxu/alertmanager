@@ -21,9 +21,6 @@ type AlertGroup struct {
 	// alerts
 	Alerts []*GettableAlert `json:"alerts"`
 
-	// group by
-	GroupBy []string `json:"groupBy"`
-
 	// labels
 	Labels LabelSet `json:"labels,omitempty"`
 
