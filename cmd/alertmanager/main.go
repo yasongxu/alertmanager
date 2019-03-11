@@ -251,13 +251,8 @@ func run() int {
 	var disp *dispatch.Dispatcher
 	defer disp.Stop()
 
-	// TODO: Finish me!
-	// TODO: Do we want to expose open_api_models into dispatcher or main?
-	// Or keep it as a presenter within the API code?
 	groupFn := func(matchers []*labels.Matcher, receivers *regexp.Regexp, silenced, inhibited, active bool) dispatch.AlertGroups {
-		// marker.Status()
 		return disp.Groups(matchers, receivers, silenced, inhibited, active)
-		// return &open_api_models.AlertGroups{}
 	}
 
 	api, err := api.New(api.Options{

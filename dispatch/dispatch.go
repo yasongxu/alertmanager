@@ -149,8 +149,9 @@ type AlertGroup struct {
 // fingerprint.
 type EnrichedAlert struct {
 	*types.Alert
-	Status      types.AlertStatus `json:"status"`
-	Fingerprint string            `json:"fingerprint"`
+	Status      types.AlertStatus
+	Fingerprint string
+	Receivers   *[]string
 }
 
 type AlertGroups []*AlertGroup
@@ -160,7 +161,7 @@ func (ag AlertGroups) Less(i, j int) bool { return ag[i].Labels.Before(ag[j].Lab
 func (ag AlertGroups) Len() int           { return len(ag) }
 
 // Groups returns a slice of AlertGroups from the dispatcher's internal state.
-func (d *Dispatcher) Groups(matchers []*labels.Matcher, receivers *regexp.Regexp, silenced, inhibited, active bool) AlertGroups {
+func (d *Dispatcher) Groups(matchers []*labels.Matcher, receiverFilter *regexp.Regexp, silenced, inhibited, active bool) AlertGroups {
 	groups := AlertGroups{}
 
 	d.mtx.RLock()
@@ -168,13 +169,23 @@ func (d *Dispatcher) Groups(matchers []*labels.Matcher, receivers *regexp.Regexp
 
 	seen := map[model.Fingerprint]*AlertGroup{}
 
+	// Keep a list of receivers for an alert to prevent checking each alert
+	// again against all routes. The alert has already matched against this
+	// route on ingestion.
+	receivers := map[model.Fingerprint][]string{}
+
 	for route, ags := range d.aggrGroups {
+		receiver := route.RouteOpts.Receiver
+		if receiverFilter != nil && !receiverFilter.MatchString(receiver) {
+			continue
+		}
+
 		for _, ag := range ags {
 			alertGroup, ok := seen[ag.fingerprint()]
 			if !ok {
 				alertGroup = &AlertGroup{
 					Labels:   ag.labels,
-					Receiver: route.RouteOpts.Receiver,
+					Receiver: receiver,
 				}
 
 				seen[ag.fingerprint()] = alertGroup
@@ -188,8 +199,9 @@ func (d *Dispatcher) Groups(matchers []*labels.Matcher, receivers *regexp.Regexp
 				if !a.EndsAt.IsZero() && a.EndsAt.Before(now) {
 					continue
 				}
+				fp := a.Fingerprint()
 				d.setAlertStatus(a.Labels)
-				status := d.marker.Status(a.Fingerprint())
+				status := d.marker.Status(fp)
 
 				if !active && status.State == types.AlertStateActive {
 					continue
@@ -203,14 +215,29 @@ func (d *Dispatcher) Groups(matchers []*labels.Matcher, receivers *regexp.Regexp
 					continue
 				}
 
+				if !matchesFilterLabels(a.Labels, matchers) {
+					continue
+				}
+
 				ea := &EnrichedAlert{
 					Alert:       a,
 					Status:      status,
-					Fingerprint: a.Fingerprint().String(),
+					Fingerprint: fp.String(),
 				}
 
-				if !matchesFilterLabels(ea, matchers) {
-					continue
+				if r, ok := receivers[fp]; ok {
+					// Receivers slice already exists. Add
+					// the current receiver.
+					// ea stores a pointer to this slice,
+					// so any changes to this slice will be
+					// available from ea.
+					r = append(r, receiver)
+				} else {
+					// First time we've seen this alert.
+					// Initialize a new receivers slice.
+					r := []string{receiver}
+					receivers[fp] = r
+					ea.Receivers = &r
 				}
 
 				enrichedAlerts = append(enrichedAlerts, ea)
@@ -229,9 +256,9 @@ func (d *Dispatcher) Groups(matchers []*labels.Matcher, receivers *regexp.Regexp
 	return groups
 }
 
-func matchesFilterLabels(a *EnrichedAlert, matchers []*labels.Matcher) bool {
+func matchesFilterLabels(labels model.LabelSet, matchers []*labels.Matcher) bool {
 	for _, m := range matchers {
-		if v, prs := a.Labels[model.LabelName(m.Name)]; !prs || !m.Matches(string(v)) {
+		if v, prs := labels[model.LabelName(m.Name)]; !prs || !m.Matches(string(v)) {
 			return false
 		}
 	}

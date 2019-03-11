@@ -399,10 +399,7 @@ func (api *API) getAlertGroupsHandler(params alertgroup_ops.GetAlertGroupsParams
 	var (
 		err            error
 		receiverFilter *regexp.Regexp
-		// Initialize result slice to prevent api returning `null` when there
-		// are no alert groups present
-		res      = open_api_models.AlertGroups{}
-		matchers = []*labels.Matcher{}
+		matchers       = []*labels.Matcher{}
 	)
 
 	if params.Filter != nil {
@@ -430,9 +427,55 @@ func (api *API) getAlertGroupsHandler(params alertgroup_ops.GetAlertGroupsParams
 
 	alertGroups := api.groups(matchers, receiverFilter, *params.Silenced, *params.Inhibited, *params.Active)
 
-	level.Debug(api.logger).Log("msg", "alertgroups", "groups", alertGroups)
+	res := make(open_api_models.AlertGroups, 0, len(alertGroups))
 
-	// TODO: Convert alertGroups into open_api_models.AlertGroups{}
+	for _, alertGroup := range alertGroups {
+		ag := &open_api_models.AlertGroup{
+			Receiver: alertGroup.Receiver,
+			Labels:   modelLabelSetToAPILabelSet(alertGroup.Labels),
+			Alerts:   make([]*open_api_models.GettableAlert, 0, len(alertGroup.Alerts)),
+		}
+
+		for _, ea := range alertGroup.Alerts {
+			state := string(ea.Status.State)
+			startsAt := strfmt.DateTime(ea.StartsAt)
+			updatedAt := strfmt.DateTime(ea.UpdatedAt)
+			endsAt := strfmt.DateTime(ea.EndsAt)
+
+			receivers := make([]*open_api_models.Receiver, 0, len(*ea.Receivers))
+			for _, name := range *ea.Receivers {
+				receivers = append(receivers, &open_api_models.Receiver{Name: &name})
+			}
+
+			aa := &open_api_models.GettableAlert{
+				Alert: open_api_models.Alert{
+					GeneratorURL: strfmt.URI(ea.GeneratorURL),
+					Labels:       modelLabelSetToAPILabelSet(ea.Labels),
+				},
+				Annotations: modelLabelSetToAPILabelSet(ea.Alert.Annotations),
+				StartsAt:    &startsAt,
+				UpdatedAt:   &updatedAt,
+				EndsAt:      &endsAt,
+				Fingerprint: &ea.Fingerprint,
+				Receivers:   receivers,
+				Status: &open_api_models.AlertStatus{
+					State:       &state,
+					SilencedBy:  ea.Status.SilencedBy,
+					InhibitedBy: ea.Status.InhibitedBy,
+				},
+			}
+
+			if aa.Status.SilencedBy == nil {
+				aa.Status.SilencedBy = []string{}
+			}
+
+			if aa.Status.InhibitedBy == nil {
+				aa.Status.InhibitedBy = []string{}
+			}
+			ag.Alerts = append(ag.Alerts, aa)
+		}
+		res = append(res, ag)
+	}
 
 	return alertgroup_ops.NewGetAlertGroupsOK().WithPayload(res)
 }
