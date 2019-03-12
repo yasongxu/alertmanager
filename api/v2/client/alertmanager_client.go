@@ -77,7 +77,7 @@ func New(transport runtime.ClientTransport, formats strfmt.Registry) *Alertmanag
 
 	cli.Alert = alert.New(transport, formats)
 
-	cli.Alertgroup = alertgroup.New(transport, formats)
+	cli.Alertgroups = alertgroup.New(transport, formats)
 
 	cli.General = general.New(transport, formats)
 
@@ -131,7 +131,7 @@ func (cfg *TransportConfig) WithSchemes(schemes []string) *TransportConfig {
 type Alertmanager struct {
 	Alert *alert.Client
 
-	Alertgroup *alertgroup.Client
+	Alertgroups *alertgroup.Client
 
 	General *general.Client
 
@@ -148,7 +148,7 @@ func (c *Alertmanager) SetTransport(transport runtime.ClientTransport) {
 
 	c.Alert.SetTransport(transport)
 
-	c.Alertgroup.SetTransport(transport)
+	c.Alertgroups.SetTransport(transport)
 
 	c.General.SetTransport(transport)
 
