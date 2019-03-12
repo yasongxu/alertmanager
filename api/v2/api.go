@@ -402,16 +402,14 @@ func (api *API) getAlertGroupsHandler(params alertgroup_ops.GetAlertGroupsParams
 		matchers       = []*labels.Matcher{}
 	)
 
-	if params.Filter != nil {
-		for _, matcherString := range params.Filter {
-			matcher, err := parse.Matcher(matcherString)
-			if err != nil {
-				level.Error(api.logger).Log("msg", "failed to parse matchers", "err", err)
-				return alertgroup_ops.NewGetAlertGroupsBadRequest().WithPayload(err.Error())
-			}
-
-			matchers = append(matchers, matcher)
+	for _, matcherString := range params.Filter {
+		matcher, err := parse.Matcher(matcherString)
+		if err != nil {
+			level.Error(api.logger).Log("msg", "failed to parse matchers", "err", err)
+			return alertgroup_ops.NewGetAlertGroupsBadRequest().WithPayload(err.Error())
 		}
+
+		matchers = append(matchers, matcher)
 	}
 
 	if params.Receiver != nil {
