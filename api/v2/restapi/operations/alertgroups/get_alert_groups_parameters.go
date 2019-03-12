@@ -55,6 +55,7 @@ type GetAlertGroupsParams struct {
 	Active *bool
 	/*A list of matchers to filter alerts by
 	  In: query
+	  Collection Format: multi
 	*/
 	Filter []string
 	/*Show inhibited alerts
@@ -140,16 +141,12 @@ func (o *GetAlertGroupsParams) bindActive(rawData []string, hasKey bool, formats
 
 // bindFilter binds and validates array parameter Filter from query.
 //
-// Arrays are parsed according to CollectionFormat: "" (defaults to "csv" when empty).
+// Arrays are parsed according to CollectionFormat: "multi" (defaults to "csv" when empty).
 func (o *GetAlertGroupsParams) bindFilter(rawData []string, hasKey bool, formats strfmt.Registry) error {
 
-	var qvFilter string
-	if len(rawData) > 0 {
-		qvFilter = rawData[len(rawData)-1]
-	}
+	// CollectionFormat: multi
+	filterIC := rawData
 
-	// CollectionFormat:
-	filterIC := swag.SplitByFormat(qvFilter, "")
 	if len(filterIC) == 0 {
 		return nil
 	}
