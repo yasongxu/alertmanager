@@ -151,7 +151,7 @@ func init() {
       "get": {
         "description": "Get a list of alert groups",
         "tags": [
-          "alertgroups"
+          "alertgroup"
         ],
         "operationId": "getAlertGroups",
         "parameters": [
@@ -931,7 +931,7 @@ func init() {
       "get": {
         "description": "Get a list of alert groups",
         "tags": [
-          "alertgroups"
+          "alertgroup"
         ],
         "operationId": "getAlertGroups",
         "parameters": [
